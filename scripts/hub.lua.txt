@@ -135,5 +135,5 @@ else
     print("If game IS supported, create a ticket in our discord: discord.gg/NGAaby4y4b")
     print("--=(Astronaut)=--")
     local notif = loadstring(game:HttpGet("https://raw.githubusercontent.com/laagginq/ui-libraries/main/dxhooknotify/src.lua", true))()
-    notif:Notify("nick7 hub","Game is not supported! Check \"/console\"",20)
+    notif:Notify("Astro Hub","Game is not supported! Check \"/console\"",20)
 end
