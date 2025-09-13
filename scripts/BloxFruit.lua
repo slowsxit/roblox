@@ -1,7 +1,7 @@
 task.spawn(function()
 	local msg = Instance.new("Hint", workspace)
     msg.Text = "Started loading nick7 hub, please wait... // "..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Blox Fruits"
-    task.wait(5)
+    task.wait(10)
     msg:Destroy()
 end)
 local xm
@@ -267,7 +267,7 @@ local Window = WindUI:CreateWindow({
 });
 
 Window:CreateTopbarButton("theme-switcher", "moon", function()
-    WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "Light" or "Crimson");
+    WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "Crimson" or "Dark");
     WindUI:Notify({
         Title = "Theme Changed",
         Icon = "circle-check",

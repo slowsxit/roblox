@@ -109,7 +109,9 @@ end
 
 local games = {
     [2753915549] = 'load("BloxFruit.lua")',
-    [16732694052] = 'load("Fisch.lua")',
+    [4442272183] = 'load("BloxFruit.lua")',
+    [7449423635] = 'load("BloxFruit.lua")',
+    [5750914919] = 'load("Fisch.lua")', 
 }
 
 local broken = {}
