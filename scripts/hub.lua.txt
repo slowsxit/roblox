@@ -108,10 +108,9 @@ function load_obf(text) -- load() wrapper
 end
 
 local games = {
-    [2753915549] = 'load("BloxFruit.lua")',
-    [4442272183] = 'load("BloxFruit.lua")',
-    [7449423635] = 'load("BloxFruit.lua")',
+    [994732206] = 'load("BloxFruit.lua")',
     [5750914919] = 'load("Fisch.lua")', 
+    [7709344486] = 'load("StealABrainrot.lua")',
 }
 
 local broken = {}
@@ -131,8 +130,8 @@ if supported then
     end
 else
     print("--=(Astronaut)=--")
-    warn(`Game ({id}) is not supported by nick7 hub!`)
-    print("If game IS supported, create a ticket in our discord: discord.gg/NGAaby4y4b")
+    warn(`Game ({id}) is not supported by Astro hub!`)
+    print("If game IS supported, create a ticket in our discord: discord.gg/tSeT4BV5wq")
     print("--=(Astronaut)=--")
     local notif = loadstring(game:HttpGet("https://raw.githubusercontent.com/laagginq/ui-libraries/main/dxhooknotify/src.lua", true))()
     notif:Notify("Astro Hub","Game is not supported! Check \"/console\"",20)

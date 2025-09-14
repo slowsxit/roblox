@@ -1,0 +1,875 @@
+local notif = loadstring(game:HttpGet("https://raw.githubusercontent.com/laagginq/ui-libraries/main/dxhooknotify/src.lua", true))();
+local service = 5848;--Set your Platoboost Id 
+local secret = "0df39949-5824-43c0-bbbf-5013f43fe54c"; --Set Your Platoboost Api key
+local useNonce = true; 
+local onMessage = function(message) game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", { Text = message; }) end;
+
+repeat task.wait(1) until game:IsLoaded() or game.Players.LocalPlayer;
+
+local requestSending = false;
+local fSetClipboard, fRequest, fStringChar, fToString, fStringSub, fOsTime, fMathRandom, fMathFloor, fGetHwid = setclipboard or toclipboard, request or http_request, string.char, tostring, string.sub, os.time, math.random, math.floor, gethwid or function() return game:GetService("Players").LocalPlayer.UserId end
+local cachedLink, cachedTime = "", 0;
+local HttpService = game:GetService("HttpService")
+
+function lEncode(data)
+    return HttpService:JSONEncode(data)
+end
+function lDecode(data)
+    return HttpService:JSONDecode(data)
+end
+local function lDigest(input)
+    local inputStr = tostring(input)
+    
+    
+    local hash = {}
+    for i = 1, #inputStr do
+        table.insert(hash, string.byte(inputStr, i))
+    end
+
+    local hashHex = ""
+    for _, byte in ipairs(hash) do
+        hashHex = hashHex .. string.format("%02x", byte)
+    end
+    
+    return hashHex
+end
+local host = "https://api.platoboost.com";
+local hostResponse = fRequest({
+    Url = host .. "/public/connectivity",
+    Method = "GET"
+});
+if hostResponse.StatusCode ~= 200 or hostResponse.StatusCode ~= 429 then
+    host = "https://api.platoboost.net";
+end
+
+function cacheLink()
+    if cachedTime + (10*60) < fOsTime() then
+        local response = fRequest({
+            Url = host .. "/public/start",
+            Method = "POST",
+            Body = lEncode({
+                service = service,
+                identifier = lDigest(fGetHwid())
+            }),
+            Headers = {
+                ["Content-Type"] = "application/json"
+            }
+        });
+
+        if response.StatusCode == 200 then
+            local decoded = lDecode(response.Body);
+
+            if decoded.success == true then
+                cachedLink = decoded.data.url;
+                cachedTime = fOsTime();
+                return true, cachedLink;
+            else
+                onMessage(decoded.message);
+                return false, decoded.message;
+            end
+        elseif response.StatusCode == 429 then
+            local msg = "you are being rate limited, please wait 20 seconds and try again.";
+            notif:Notify("Notification","you are being rate limited, \nplease wait 20 seconds and try again.",3);
+            onMessage(msg);
+            return false, msg;
+        end
+
+        local msg = "Failed to cache link.";
+        notif:Notify("Notification","Failed to cache link.",3);
+        onMessage(msg);
+        return false, msg;
+    else
+        return true, cachedLink;
+    end
+end
+
+cacheLink();
+
+local generateNonce = function()
+    local str = ""
+    for _ = 1, 16 do
+        str = str .. fStringChar(fMathFloor(fMathRandom() * (122 - 97 + 1)) + 97)
+    end
+    return str
+end
+
+
+for _ = 1, 5 do
+    local oNonce = generateNonce();
+    task.wait(0.2)
+    if generateNonce() == oNonce then
+        local msg = "platoboost nonce error.";
+        notif:Notify("Notification","platoboost nonce error.",3);
+        onMessage(msg);
+        error(msg);
+    end
+end
+
+local copyLink = function()
+    local success, link = cacheLink();
+    
+    if success then
+        print("SetClipBoard")
+        fSetClipboard(link);
+    end
+end
+
+local redeemKey = function(key)
+    local nonce = generateNonce();
+    local endpoint = host .. "/public/redeem/" .. fToString(service);
+
+    local body = {
+        identifier = lDigest(fGetHwid()),
+        key = key
+    }
+
+    if useNonce then
+        body.nonce = nonce;
+    end
+
+    local response = fRequest({
+        Url = endpoint,
+        Method = "POST",
+        Body = lEncode(body),
+        Headers = {
+            ["Content-Type"] = "application/json"
+        }
+    });
+
+    if response.StatusCode == 200 then
+        local decoded = lDecode(response.Body);
+        if decoded.success == true then
+            if decoded.data.valid == true then
+                if useNonce then
+                    if decoded.data.hash == lDigest("true" .. "-" .. nonce .. "-" .. secret) then
+                        return true;
+                    else
+                        onMessage("failed to verify integrity.");
+                        notif:Notify("Notification","failed to verify integrity.",3);
+                        return false;
+                    end    
+                else
+                    return true;
+                end
+            else
+                onMessage("key is invalid.");
+                notif:Notify("Notification","key is invalid.",3)
+                return false;
+            end
+        else
+            if fStringSub(decoded.message, 1, 27) == "unique constraint violation" then
+                onMessage("you already have an active key, please wait for it to expire before redeeming it.");
+                notif:Notify("Notification","you already have an active key, please wait \n for it to expire before redeeming it.",7);
+                return false;
+            else
+                onMessage(decoded.message);
+                return false;
+            end
+        end
+    elseif response.StatusCode == 429 then
+        onMessage("you are being rate limited, please wait 20 seconds and try again.");
+        notif:Notify("Notification","you are being rate limited, \nplease wait 20 seconds and try again.",3);
+        return false;
+    else
+        onMessage("server returned an invalid status code, please try again later.");
+        notif:Notify("Notification","server returned an invalid status code, \nplease try again later.",3);
+        return false; 
+    end
+end
+
+
+local verifyKey = function(key)
+    if requestSending == true then
+        onMessage("a request is already being sent, please slow down.");
+        notif:Notify("Notification","a request is already being sent, \nplease slow down.",3);
+        return false;
+    else
+        requestSending = true;
+    end
+
+    local nonce = generateNonce();
+    local endpoint = host .. "/public/whitelist/" .. fToString(service) .. "?identifier=" .. lDigest(fGetHwid()) .. "&key=" .. key;
+
+    if useNonce then
+        endpoint = endpoint .. "&nonce=" .. nonce;
+    end
+    local response = fRequest({
+        Url = endpoint,
+        Method = "GET",
+    });
+
+    requestSending = false;
+
+    if response.StatusCode == 200 then
+        local decoded = lDecode(response.Body);
+        if decoded.success == true then
+            if decoded.data.valid == true then
+                if useNonce then
+                    return true;
+                else
+                    return true;
+                end
+            else
+                if fStringSub(key, 1, 4) == "FREE_" then
+                    return redeemKey(key);
+                else
+                    onMessage("key is invalid.");
+                    notif:Notify("Notification","key is invalid.",3);   
+                    return false;
+                end
+            end
+        else
+            onMessage(decoded.message);
+            return false;
+        end
+    elseif response.StatusCode == 429 then
+        onMessage("you are being rate limited, please wait 20 seconds and try again.");
+        notif:Notify("Notification","you are being rate limited, \nplease wait 20 seconds and try again.",3);
+        return false;
+    else
+        onMessage("server returned an invalid status code, please try again later.");       
+        notif:Notify("Notification","server returned an invalid status code, \nplease try again later.",3);
+        return false;
+    end
+end
+
+
+local getFlag = function(name)
+    local nonce = generateNonce();
+    local endpoint = host .. "/public/flag/" .. fToString(service) .. "?name=" .. name;
+
+    if useNonce then
+        endpoint = endpoint .. "&nonce=" .. nonce;
+    end
+
+    local response = fRequest({
+        Url = endpoint,
+        Method = "GET",
+    });
+
+    if response.StatusCode == 200 then
+        local decoded = lDecode(response.Body);
+        if decoded.success == true then
+            if useNonce then
+                if decoded.data.hash == lDigest(fToString(decoded.data.value) .. "-" .. nonce .. "-" .. secret) then
+                    return decoded.data.value;
+                else
+                    onMessage("failed to verify integrity.");
+                    notif:Notify("Notification","failed to verify integrity.",3); 
+                    return nil;
+                end
+            else
+                return decoded.data.value;
+            end
+        else
+            onMessage(decoded.message);
+            return nil;
+        end
+    else
+        return nil;
+    end
+end
+
+task.spawn(function()
+repeat wait() until game:IsLoaded()
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local function createNotification(title, content, duration, color, parent)
+    duration = duration or 5
+    color = color or Color3.fromRGB(255, 188, 254)
+    
+    local Notification = Instance.new("Frame")
+    Notification.Name = "Notification"
+    Notification.AnchorPoint = Vector2.new(1, 1)
+    Notification.BackgroundTransparency = 0.06
+    Notification.AutomaticSize = Enum.AutomaticSize.XY
+    Notification.BackgroundColor3 = Color3.fromRGB(16, 16, 16)
+    Notification.BorderSizePixel = 0
+    Notification.Position = UDim2.new(1, -25, 1, -25)
+    Notification.Size = UDim2.fromOffset(232, 59)
+    Notification.Parent = parent
+    
+    local NotifStroke = Instance.new("UIStroke")
+    NotifStroke.Name = "_CHILD"
+    NotifStroke.Color = Color3.fromRGB(158, 114, 158)
+    NotifStroke.Transparency = 0.9
+    NotifStroke.Parent = Notification
+    
+    local NotifAcrylic1 = Instance.new("ImageLabel")
+    NotifAcrylic1.Name = "acrylicthing"
+    NotifAcrylic1.Image = "rbxassetid://9968344105"
+    NotifAcrylic1.ImageTransparency = 0.98
+    NotifAcrylic1.ScaleType = Enum.ScaleType.Tile
+    NotifAcrylic1.TileSize = UDim2.fromOffset(128, 128)
+    NotifAcrylic1.BackgroundTransparency = 1
+    NotifAcrylic1.Size = UDim2.fromScale(1, 1)
+    
+    local NotifAcrylicCorner1 = Instance.new("UICorner")
+    NotifAcrylicCorner1.CornerRadius = UDim.new(0, 12)
+    NotifAcrylicCorner1.Parent = NotifAcrylic1
+    
+    NotifAcrylic1.Parent = Notification
+    
+    local NotifAcrylic2 = Instance.new("ImageLabel")
+    NotifAcrylic2.Name = "acrylicthing"
+    NotifAcrylic2.Image = "rbxassetid://9968344227"
+    NotifAcrylic2.ImageTransparency = 0.9
+    NotifAcrylic2.ScaleType = Enum.ScaleType.Tile
+    NotifAcrylic2.TileSize = UDim2.fromOffset(128, 128)
+    NotifAcrylic2.BackgroundTransparency = 1
+    NotifAcrylic2.Size = UDim2.fromScale(1, 1)
+    
+    local NotifAcrylicCorner2 = Instance.new("UICorner")
+    NotifAcrylicCorner2.CornerRadius = UDim.new(0, 12)
+    NotifAcrylicCorner2.Parent = NotifAcrylic2
+    
+    NotifAcrylic2.Parent = Notification
+    
+    local TextHolder = Instance.new("Frame")
+    TextHolder.Name = "TextHolder"
+    TextHolder.AutomaticSize = Enum.AutomaticSize.XY
+    TextHolder.BackgroundTransparency = 1
+    TextHolder.Position = UDim2.new(0, 7, 0.12, 0)
+    TextHolder.Size = UDim2.fromOffset(20, 12)
+    
+    local TextLayout = Instance.new("UIListLayout")
+    TextLayout.Padding = UDim.new(0, -4)
+    TextLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    TextLayout.Parent = TextHolder
+    
+    local TitleText = Instance.new("TextLabel")
+    TitleText.FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold)
+    TitleText.Text = title
+    TitleText.TextColor3 = Color3.fromRGB(199, 199, 203)
+    TitleText.TextSize = 14
+    TitleText.TextXAlignment = Enum.TextXAlignment.Left
+    TitleText.AutomaticSize = Enum.AutomaticSize.X
+    TitleText.BackgroundTransparency = 1
+    TitleText.Position = UDim2.fromOffset(10, 8)
+    TitleText.Size = UDim2.fromOffset(212, 20)
+    TitleText.Parent = TextHolder
+    
+    local ContentText = Instance.new("TextLabel")
+    ContentText.Name = "TextLabel"
+    ContentText.FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+    ContentText.Text = content
+    ContentText.TextColor3 = Color3.fromRGB(127, 127, 130)
+    ContentText.TextSize = 12
+    ContentText.TextXAlignment = Enum.TextXAlignment.Left
+    ContentText.AutomaticSize = Enum.AutomaticSize.X
+    ContentText.BackgroundTransparency = 1
+    ContentText.Position = UDim2.fromOffset(10, 8)
+    ContentText.Size = UDim2.fromOffset(212, 20)
+    ContentText.Parent = TextHolder
+    
+    local TextPadding = Instance.new("UIPadding")
+    TextPadding.PaddingBottom = UDim.new(0, 25)
+    TextPadding.Parent = TextHolder
+    
+    TextHolder.Parent = Notification
+    
+    local ProgressBar = Instance.new("Frame")
+    ProgressBar.BackgroundColor3 = Color3.fromRGB(44, 38, 44)
+    ProgressBar.BorderSizePixel = 0
+    ProgressBar.Position = UDim2.fromScale(0.0282, 0.8)
+    ProgressBar.Size = UDim2.new(1, -20, 0, 7)
+    
+    local ProgressLayout = Instance.new("UIListLayout")
+    ProgressLayout.Name = "UIListLayout"
+    ProgressLayout.Wraps = true
+    ProgressLayout.FillDirection = Enum.FillDirection.Horizontal
+    ProgressLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    ProgressLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    ProgressLayout.Parent = ProgressBar
+    
+    local ProgressFill = Instance.new("Frame")
+    ProgressFill.BackgroundColor3 = color
+    ProgressFill.BorderSizePixel = 0
+    ProgressFill.Size = UDim2.fromScale(1, 1)
+    
+    local ProgressFillCorner = Instance.new("UICorner")
+    ProgressFillCorner.Parent = ProgressFill
+    
+    local ProgressGradient = Instance.new("UIGradient")
+    ProgressGradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.752, Color3.fromRGB(147, 147, 147)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(127, 127, 127))
+    }
+    ProgressGradient.Parent = ProgressFill
+    
+    ProgressFill.Parent = ProgressBar
+    
+    local ProgressBarCorner = Instance.new("UICorner")
+    ProgressBarCorner.Parent = ProgressBar
+    
+    ProgressBar.Parent = Notification
+    
+    local NotifCorner = Instance.new("UICorner")
+    NotifCorner.CornerRadius = UDim.new(0, 4)
+    NotifCorner.Parent = Notification
+    
+    local NotifPadding = Instance.new("UIPadding")
+    NotifPadding.PaddingBottom = UDim.new(0, 12)
+    NotifPadding.Parent = Notification
+    
+    local DismissButton = Instance.new("TextButton")
+    DismissButton.Name = "DismissButton"
+    DismissButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    DismissButton.BackgroundTransparency = 1
+    DismissButton.Size = UDim2.fromScale(1, 1)
+    DismissButton.Text = ""
+    DismissButton.Parent = Notification
+    
+    TweenService:Create(ProgressFill, TweenInfo.new(duration, Enum.EasingStyle.Linear), {Size = UDim2.new(0, 0, 1, 0)}):Play()
+    
+    task.delay(duration, function()
+        TweenService:Create(Notification, TweenInfo.new(0.5), {Position = UDim2.new(1, 25, 1, -25)}):Play()
+        task.wait(0.5)
+        Notification:Destroy()
+    end)
+    
+    DismissButton.MouseButton1Click:Connect(function()
+        TweenService:Create(Notification, TweenInfo.new(0.5), {Position = UDim2.new(1, 25, 1, -25)}):Play()
+        task.wait(0.5)
+        Notification:Destroy()
+    end)
+    
+    DismissButton.MouseEnter:Connect(function()
+        TweenService:Create(DismissButton, TweenInfo.new(0.1), {BackgroundTransparency = 0.65}):Play()
+    end)
+    
+    DismissButton.MouseLeave:Connect(function()
+        TweenService:Create(DismissButton, TweenInfo.new(0.1), {BackgroundTransparency = 1}):Play()
+    end)
+    
+    return Notification
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AstroHubLogin"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 16)
+MainFrame.BackgroundTransparency = 0.06
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.fromScale(0.5, 0.5)
+MainFrame.Size = UDim2.fromOffset(400, 360)
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 12)
+UICorner.Parent = MainFrame
+
+local AcrylicEffect1 = Instance.new("ImageLabel")
+AcrylicEffect1.Name = "acrylicthing"
+AcrylicEffect1.Image = "rbxassetid://9968344105"
+AcrylicEffect1.ImageTransparency = 0.98
+AcrylicEffect1.ScaleType = Enum.ScaleType.Tile
+AcrylicEffect1.TileSize = UDim2.fromOffset(128, 128)
+AcrylicEffect1.BackgroundTransparency = 1
+AcrylicEffect1.Size = UDim2.fromScale(1, 1)
+AcrylicEffect1.ZIndex = 0
+AcrylicEffect1.Parent = MainFrame
+
+local AcrylicCorner1 = Instance.new("UICorner")
+AcrylicCorner1.CornerRadius = UDim.new(0, 12)
+AcrylicCorner1.Parent = AcrylicEffect1
+
+local AcrylicEffect2 = Instance.new("ImageLabel")
+AcrylicEffect2.Name = "acrylicthing"
+AcrylicEffect2.Image = "rbxassetid://9968344227"
+AcrylicEffect2.ImageTransparency = 0.9
+AcrylicEffect2.ScaleType = Enum.ScaleType.Tile
+AcrylicEffect2.TileSize = UDim2.fromOffset(128, 128)
+AcrylicEffect2.BackgroundTransparency = 1
+AcrylicEffect2.Size = UDim2.fromScale(1, 1)
+AcrylicEffect2.ZIndex = 0
+AcrylicEffect2.Parent = MainFrame
+
+local AcrylicCorner2 = Instance.new("UICorner")
+AcrylicCorner2.CornerRadius = UDim.new(0, 12)
+AcrylicCorner2.Parent = AcrylicEffect2
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Name = "_CHILD"
+UIStroke.Color = Color3.fromRGB(158, 114, 158)
+UIStroke.Transparency = 0.9
+UIStroke.Parent = MainFrame
+
+local SideIndicator = Instance.new("Frame")
+SideIndicator.Name = "sideindicator"
+SideIndicator.AnchorPoint = Vector2.new(0.5, 0)
+SideIndicator.BackgroundColor3 = Color3.fromRGB(255, 188, 254)
+SideIndicator.BorderSizePixel = 0
+SideIndicator.Position = UDim2.fromScale(0.5, 0)
+SideIndicator.Size = UDim2.new(1, -50, 0, 2)
+SideIndicator.Parent = MainFrame
+
+local SideIndicatorCorner = Instance.new("UICorner")
+SideIndicatorCorner.CornerRadius = UDim.new(0, 634)
+SideIndicatorCorner.Parent = SideIndicator
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "title"
+TitleLabel.FontFace = Font.new("rbxassetid://12187361378", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+TitleLabel.Text = "Astro Hub"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 19
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Position = UDim2.fromOffset(37, 15)
+TitleLabel.Size = UDim2.new(0, 88, 0, 30)
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = MainFrame
+
+local ControlsFrame = Instance.new("Frame")
+ControlsFrame.Name = "Frame"
+ControlsFrame.BackgroundTransparency = 1
+ControlsFrame.Position = UDim2.new(1, -75, 0, 15)
+ControlsFrame.Size = UDim2.new(0, 60, 0, 30)
+ControlsFrame.Parent = MainFrame
+
+local ControlsLayout = Instance.new("UIListLayout")
+ControlsLayout.FillDirection = Enum.FillDirection.Horizontal
+ControlsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ControlsLayout.Padding = UDim.new(0, 6)
+ControlsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ControlsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+ControlsLayout.Parent = ControlsFrame
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "Close"
+CloseButton.Text = ""
+CloseButton.BackgroundColor3 = Color3.fromRGB(252, 95, 83)
+CloseButton.Size = UDim2.fromOffset(7, 7)
+CloseButton.AutoButtonColor = false
+CloseButton.Parent = ControlsFrame
+
+local CloseButtonCorner = Instance.new("UICorner")
+CloseButtonCorner.CornerRadius = UDim.new(0, 50)
+CloseButtonCorner.Parent = CloseButton
+
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Name = "Minimize"
+MinimizeButton.Text = ""
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(242, 191, 60)
+MinimizeButton.Size = UDim2.fromOffset(7, 7)
+MinimizeButton.AutoButtonColor = false
+MinimizeButton.Parent = ControlsFrame
+
+local MinimizeButtonCorner = Instance.new("UICorner")
+MinimizeButtonCorner.CornerRadius = UDim.new(0, 50)
+MinimizeButtonCorner.Parent = MinimizeButton
+
+local OpenButton = Instance.new("TextButton")
+OpenButton.Name = "Open"
+OpenButton.Text = ""
+OpenButton.BackgroundColor3 = Color3.fromRGB(117, 166, 87)
+OpenButton.Size = UDim2.fromOffset(7, 7)
+OpenButton.AutoButtonColor = false
+OpenButton.Parent = ControlsFrame
+
+local OpenButtonCorner = Instance.new("UICorner")
+OpenButtonCorner.CornerRadius = UDim.new(0, 50)
+OpenButtonCorner.Parent = OpenButton
+
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "ContentFrame"
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Position = UDim2.fromOffset(0, 60)
+ContentFrame.Size = UDim2.new(1, 0, 1, -60)
+ContentFrame.Parent = MainFrame
+
+local GameLabel = Instance.new("TextLabel")
+GameLabel.Name = "GameLabel"
+GameLabel.FontFace = Font.new("rbxassetid://12187365364")
+GameLabel.Text = "Game: " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+GameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+GameLabel.TextSize = 12
+GameLabel.BackgroundTransparency = 1
+GameLabel.Position = UDim2.fromOffset(20, 0)
+GameLabel.Size = UDim2.new(1, -40, 0, 20)
+GameLabel.Parent = ContentFrame
+
+local KeySection = Instance.new("Frame")
+KeySection.Name = "KeySection"
+KeySection.BackgroundTransparency = 1
+KeySection.Position = UDim2.fromOffset(20, 25) 
+KeySection.Size = UDim2.new(1, -40, 0, 70)
+KeySection.Parent = ContentFrame
+
+local KeyLabel = Instance.new("TextLabel")
+KeyLabel.Name = "KeyLabel"
+KeyLabel.FontFace = Font.new("rbxassetid://12187365364")
+KeyLabel.Text = "Key"
+KeyLabel.TextColor3 = Color3.fromRGB(122, 122, 122)
+KeyLabel.TextSize = 12
+KeyLabel.TextXAlignment = Enum.TextXAlignment.Left
+KeyLabel.BackgroundTransparency = 1
+KeyLabel.Position = UDim2.fromOffset(0, 0)
+KeyLabel.Size = UDim2.new(1, 0, 0, 20)
+KeyLabel.Parent = KeySection
+
+local KeyTextboxHolder = Instance.new("Frame")
+KeyTextboxHolder.Name = "TextboxHolder"
+KeyTextboxHolder.BackgroundColor3 = Color3.fromRGB(86, 86, 86)
+KeyTextboxHolder.BackgroundTransparency = 0.95
+KeyTextboxHolder.BorderSizePixel = 0
+KeyTextboxHolder.Position = UDim2.fromOffset(0, 25)
+KeyTextboxHolder.Size = UDim2.new(1, -80, 0, 30)
+KeyTextboxHolder.Parent = KeySection
+
+local KeyTextboxCorner = Instance.new("UICorner")
+KeyTextboxCorner.CornerRadius = UDim.new(0, 4)
+KeyTextboxCorner.Parent = KeyTextboxHolder
+
+local KeyTextboxStroke = Instance.new("UIStroke")
+KeyTextboxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+KeyTextboxStroke.Color = Color3.fromRGB(56, 56, 56)
+KeyTextboxStroke.Transparency = 0.5
+KeyTextboxStroke.Parent = KeyTextboxHolder
+
+local KeyTextbox = Instance.new("TextBox")
+KeyTextbox.Name = "TextBox"
+KeyTextbox.ClearTextOnFocus = false
+KeyTextbox.FontFace = Font.new("rbxassetid://12187365364")
+KeyTextbox.PlaceholderColor3 = Color3.fromRGB(170, 170, 170)
+KeyTextbox.PlaceholderText = "Enter your key..."
+KeyTextbox.Text = ""
+KeyTextbox.TextColor3 = Color3.fromRGB(240, 240, 240)
+KeyTextbox.TextSize = 12
+KeyTextbox.TextXAlignment = Enum.TextXAlignment.Left
+KeyTextbox.BackgroundTransparency = 1
+KeyTextbox.Position = UDim2.fromOffset(10, 0)
+KeyTextbox.Size = UDim2.fromScale(1, 1)
+KeyTextbox.Parent = KeyTextboxHolder
+
+local CheckButton = Instance.new("TextButton")
+CheckButton.Name = "CheckButton"
+CheckButton.FontFace = Font.new("rbxassetid://12187365364")
+CheckButton.Text = "Check"
+CheckButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+CheckButton.TextSize = 12
+CheckButton.BackgroundColor3 = Color3.fromRGB(255, 188, 254)
+CheckButton.BorderSizePixel = 0
+CheckButton.Position = UDim2.new(1, -70, 0, 25)
+CheckButton.Size = UDim2.fromOffset(70, 30)
+CheckButton.Parent = KeySection
+
+local CheckButtonCorner = Instance.new("UICorner")
+CheckButtonCorner.CornerRadius = UDim.new(0, 4)
+CheckButtonCorner.Parent = CheckButton
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Name = "StatusLabel"
+StatusLabel.FontFace = Font.new("rbxassetid://12187365364")
+StatusLabel.Text = "Key Status: Not Checked"
+StatusLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
+StatusLabel.TextSize = 12
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Position = UDim2.fromOffset(0, 60)
+StatusLabel.Size = UDim2.new(1, 0, 0, 20)
+StatusLabel.Parent = KeySection
+
+local ButtonsSection = Instance.new("Frame")
+ButtonsSection.Name = "ButtonsSection"
+ButtonsSection.BackgroundTransparency = 1
+ButtonsSection.Position = UDim2.fromOffset(20, 135) 
+ButtonsSection.Size = UDim2.new(1, -40, 0, 180)
+ButtonsSection.Parent = ContentFrame
+
+local LinkvertiseButton = Instance.new("TextButton")
+LinkvertiseButton.Name = "LinkvertiseButton"
+LinkvertiseButton.FontFace = Font.new("rbxassetid://12187365364")
+LinkvertiseButton.Text = "Get Key (Linkvertise)"
+LinkvertiseButton.TextColor3 = Color3.fromRGB(240, 240, 240)
+LinkvertiseButton.TextSize = 12
+LinkvertiseButton.BackgroundColor3 = Color3.fromRGB(28, 29, 32)
+LinkvertiseButton.BackgroundTransparency = 0.5
+LinkvertiseButton.BorderSizePixel = 0
+LinkvertiseButton.Position = UDim2.fromOffset(0, 0)
+LinkvertiseButton.Size = UDim2.new(1, 0, 0, 40)
+LinkvertiseButton.Parent = ButtonsSection
+
+local LinkvertiseCorner = Instance.new("UICorner")
+LinkvertiseCorner.CornerRadius = UDim.new(0, 6)
+LinkvertiseCorner.Parent = LinkvertiseButton
+
+local lootlabsButton = Instance.new("TextButton")
+lootlabsButton.Name = "Button"
+lootlabsButton.FontFace = Font.new("rbxassetid://12187365364")
+lootlabsButton.Text = "Get Key (LootLabs)"
+lootlabsButton.TextColor3 = Color3.fromRGB(240, 240, 240)
+lootlabsButton.TextSize = 12
+lootlabsButton.BackgroundColor3 = Color3.fromRGB(28, 29, 32)
+lootlabsButton.BackgroundTransparency = 0.5
+lootlabsButton.BorderSizePixel = 0
+lootlabsButton.Position = UDim2.fromOffset(0, 50)
+lootlabsButton.Size = UDim2.new(1, 0, 0, 40)
+lootlabsButton.Parent = ButtonsSection
+
+local lootlabsCorner = Instance.new("UICorner")
+lootlabsCorner.CornerRadius = UDim.new(0, 6)
+lootlabsCorner.Parent = lootlabsButton
+
+local DiscordButton = Instance.new("TextButton")
+DiscordButton.Name = "DiscordButton"
+DiscordButton.FontFace = Font.new("rbxassetid://12187365364")
+DiscordButton.Text = "Join Discord"
+DiscordButton.TextColor3 = Color3.fromRGB(240, 240, 240)
+DiscordButton.TextSize = 12
+DiscordButton.BackgroundColor3 = Color3.fromRGB(28, 29, 32)
+DiscordButton.BackgroundTransparency = 0.5
+DiscordButton.BorderSizePixel = 0
+DiscordButton.Position = UDim2.fromOffset(0, 100)
+DiscordButton.Size = UDim2.new(1, 0, 0, 40)
+DiscordButton.Parent = ButtonsSection
+
+local DiscordCorner = Instance.new("UICorner")
+DiscordCorner.CornerRadius = UDim.new(0, 6)
+DiscordCorner.Parent = DiscordButton
+
+local FooterLabel = Instance.new("TextLabel")
+FooterLabel.Name = "FooterLabel"
+FooterLabel.FontFace = Font.new("rbxassetid://12187365364")
+FooterLabel.Text = "Astro Hub © 2025 | All rights reserved"
+FooterLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
+FooterLabel.TextSize = 12
+FooterLabel.BackgroundTransparency = 1
+FooterLabel.Position = UDim2.fromOffset(0, 150)
+FooterLabel.Size = UDim2.new(1, 0, 0, 20)
+FooterLabel.Parent = ButtonsSection
+
+local dragging = true
+local dragInput
+local dragStart
+local startPos
+
+local function updateDrag(input)
+    local delta = input.Position - dragStart
+    MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+MainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        updateDrag(input)
+    end
+end)
+
+local function applyButtonHoverEffect(button)
+    button.MouseEnter:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.3), {BackgroundTransparency = 0.4}):Play()
+    end)
+    
+    button.MouseLeave:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.3), {BackgroundTransparency = 0.5}):Play()
+    end)
+end
+
+applyButtonHoverEffect(LinkvertiseButton)
+applyButtonHoverEffect(lootlabsButton)
+applyButtonHoverEffect(DiscordButton)
+
+CheckButton.MouseButton1Click:Connect(function()
+        if keyText and KeyTextBox.Text then            
+            local Verify = verifyKey(KeyTextBox.Text)
+            if Verify then
+                StatusLabel.Text = "Key Status: Key Is Valid."
+                print("Key Is Valid")
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/slowsxit/roblox/refs/heads/main/scripts/hub.lua.txt"))()
+                createNotification("Notification", "Key Valid Loading Script....", 5, Color3.fromRGB(255, 188, 254), ScreenGui)
+                task.wait(0.5)
+                ScreenGui:Destroy()
+            else
+                StatusLabel.Text = "Key Status: Key Is Invalid."
+                print("Key Is Invalid")
+                createNotification("Notification", "Key Invalid Please Try Again.", 5, Color3.fromRGB(255, 188, 254), ScreenGui)
+            end 
+        end	    
+end)
+
+LinkvertiseButton.MouseButton1Click:Connect(function()
+    copyLink()
+    createNotification("Copied", "Linkvertise link copied to clipboard!", 5, Color3.fromRGB(255, 188, 254), ScreenGui)
+end)
+
+lootlabsButton.MouseButton1Click:Connect(function()
+    copyLink()
+    createNotification("Copied", "lootlabs link copied to clipboard!", 5, Color3.fromRGB(255, 188, 254), ScreenGui)
+end)
+
+DiscordButton.MouseButton1Click:Connect(function()
+    setclipboard("https://discord.gg/rSZJGSr5FW")
+    createNotification("Copied", "Discord invite copied to clipboard!", 5, Color3.fromRGB(88, 101, 242), ScreenGui)
+end)
+
+KeyTextbox.Focused:Connect(function()
+    TweenService:Create(KeyTextboxHolder, TweenInfo.new(0.2), {BackgroundTransparency = 0.87}):Play()
+    TweenService:Create(KeyLabel, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+end)
+
+KeyTextbox.FocusLost:Connect(function()
+    TweenService:Create(KeyTextboxHolder, TweenInfo.new(0.2), {BackgroundTransparency = 0.95}):Play()
+    TweenService:Create(KeyLabel, TweenInfo.new(0.2), {TextColor3 = Color3.fromRGB(122, 122, 122)}):Play()
+end)
+
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+MinimizeButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    
+    local RestoreButton = Instance.new("TextButton")
+    RestoreButton.Name = "RestoreButton"
+    RestoreButton.Text = "Fusion"
+    RestoreButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    RestoreButton.TextSize = 14
+    RestoreButton.Font = Enum.Font.Gotham
+    RestoreButton.BackgroundColor3 = Color3.fromRGB(16, 16, 16)
+    RestoreButton.BackgroundTransparency = 0.1
+    RestoreButton.BorderSizePixel = 0
+    RestoreButton.Position = UDim2.new(0, 10, 0, 10)
+    RestoreButton.Size = UDim2.fromOffset(100, 30)
+    RestoreButton.Parent = ScreenGui
+    
+    local RestoreCorner = Instance.new("UICorner")
+    RestoreCorner.CornerRadius = UDim.new(0, 6)
+    RestoreCorner.Parent = RestoreButton
+    
+    RestoreButton.MouseButton1Click:Connect(function()
+        MainFrame.Visible = true
+        RestoreButton:Destroy()
+    end)
+end)
+
+createNotification("Astro Hub", "Welcome to AstroHub! Please enter your key to continue.", 5, Color3.fromRGB(255, 188, 254), ScreenGui)
+
+MainFrame.Visible = true
