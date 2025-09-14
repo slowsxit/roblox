@@ -1,6 +1,6 @@
 task.spawn(function()
 	local msg = Instance.new("Hint", workspace)
-    msg.Text = "Started loading nick7 hub, please wait... // "..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Fisch"
+    msg.Text = "Started loading Astro Hub, please wait... // "..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Fisch"
     task.wait(5)
     msg:Destroy()
 end)
@@ -35,7 +35,7 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 local Window = Fluent:CreateWindow({
 	Title = game:GetService("MarketplaceService"):GetProductInfo(16732694052).Name .." | Astro Hub",
 	SubTitle = "discord.gg/25ms",
-	TabWidth = 300,
+	TabWidth = 160,
 	Size = UDim2.fromOffset(550, 350),
 	Acrylic = false, 
 	Theme = "Normal Theme",
@@ -163,8 +163,6 @@ ImageButton.MouseButton1Click:Connect(function()
 
     -- Simulate key presses
     local VirtualInputManager = game:GetService("VirtualInputManager")
-    VirtualInputManager:SendKeyEvent(true,"RightControl",false,game)
-    VirtualInputManager:SendKeyEvent(false,"RightControl",false,game)
     VirtualInputManager:SendKeyEvent(true,"LeftControl",false,game)
     VirtualInputManager:SendKeyEvent(false,"LeftControl",false,game)
 end)

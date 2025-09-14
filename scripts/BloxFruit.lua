@@ -1,6 +1,6 @@
 task.spawn(function()
 	local msg = Instance.new("Hint", workspace)
-    msg.Text = "Started loading nick7 hub, please wait... // "..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Blox Fruits"
+    msg.Text = "Started loading Astro Hub, please wait... // "..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Blox Fruits"
     task.wait(10)
     msg:Destroy()
 end)
@@ -254,14 +254,14 @@ v5:Destroy();
 local WindUI = (loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua")))();
 local Window = WindUI:CreateWindow({
     Title = "Astro - Hub",
-    Icon = "logo-astro",
+    Icon = "",
     Author = "Blox Fruits",
     Folder = "AstroHub",
     Size = UDim2.fromOffset(500, 400),
     Transparent = true,
     Theme = "Dark",
     HideSearchBar = false, 
-    SideBarWidth = 180,
+    SideBarWidth = 170,
     HasOutline = false,
     Keybind = Enum.KeyCode.LeftAlt,
 });
@@ -270,7 +270,7 @@ Window:CreateTopbarButton("theme-switcher", "moon", function()
     WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "Crimson" or "Dark");
     WindUI:Notify({
         Title = "Theme Changed",
-        Icon = "circle-check",
+        Icon = "check-circle",
         Content = "Currently: "..WindUI:GetCurrentTheme(),
         Duration = 2
     });
@@ -278,7 +278,7 @@ end, 990);
 
 Window:EditOpenButton({
     Title = "Astro",
-    Icon = "logo-astro", 
+    Icon = "space", 
     CornerRadius = UDim.new(0, 8),
     Draggable = true,
     OnlyMobile = true
